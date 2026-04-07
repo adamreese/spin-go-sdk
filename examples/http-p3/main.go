@@ -4,16 +4,38 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net/http"
 	"net/url"
 
-	handler "github.com/spinframework/spin-go-sdk/v3/exports/wasi_http_service_0_3_0_rc_2026_03_15/export_wasi_http_0_3_0_rc_2026_03_15_handler"
 	_ "github.com/spinframework/spin-go-sdk/v3/exports/wasi_http_service_0_3_0_rc_2026_03_15/wit_exports"
 	client "github.com/spinframework/spin-go-sdk/v3/imports/wasi_http_0_3_0_rc_2026_03_15_client"
 	types "github.com/spinframework/spin-go-sdk/v3/imports/wasi_http_0_3_0_rc_2026_03_15_types"
 	wittypes "go.bytecodealliance.org/pkg/wit/types"
+
+	spinhttp "github.com/spinframework/spin-go-sdk/v3/httpp3"
 )
 
+func init() {
+	// handler.Exports.Handle = Handle
+
+	spinhttp.Handle(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("foo", "bar")
+
+		if r.Method == http.MethodGet && r.URL.Path == "/hello" {
+			fmt.Fprintln(w, "Hello spinframework!")
+		}
+	})
+}
+
 func Handle(request *types.Request) wittypes.Result[*types.Response, types.ErrorCode] {
+	req, err := spinhttp.NewHttpRequest(request)
+	if err != nil {
+		fmt.Printf("%#v\n", err)
+	}
+
+	fmt.Printf("%#v\n", req)
+
 	method := request.GetMethod().Tag()
 	path := request.GetPathWithQuery().SomeOr("/")
 
@@ -193,10 +215,6 @@ func unitFuture() *wittypes.FutureReader[wittypes.Result[wittypes.Unit, types.Er
 	tx, rx := types.MakeFutureResultUnitErrorCode()
 	go tx.Write(wittypes.Ok[wittypes.Unit, types.ErrorCode](wittypes.Unit{}))
 	return rx
-}
-
-func init() {
-	handler.Exports.Handle = Handle
 }
 
 func main() {}
