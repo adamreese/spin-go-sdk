@@ -1,0 +1,21 @@
+#:schema https://schemas.spinframework.dev/spin/manifest-v2/latest.json
+
+spin_manifest_version = 2
+
+[application]
+name = "kitchen-sink"
+version = "0.1.0"
+authors = ["Adam Reese <adam@reese.io>"]
+description = "An example app testing the Go stdlib."
+
+[[trigger.http]]
+route = "/..."
+component = "kitchen-sink"
+
+[component.kitchen-sink]
+source = "main.wasm"
+allowed_outbound_hosts = []
+environment = { FOO = "bar" }
+files = ["test.data"]
+[component.kitchen-sink.build]
+command = "go tool componentize-go build"
