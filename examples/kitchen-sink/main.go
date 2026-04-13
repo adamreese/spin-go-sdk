@@ -27,8 +27,19 @@ func init() {
 		foo := os.Getenv("FOO")
 		fmt.Printf("FOO=%s\n", foo)
 
+		// List files
+		files, err := os.ReadDir(".")
+		if err != nil {
+			log.Printf("Error reading dir: %#v\n", err)
+			return
+		}
+		if len(files) != 1 || files[0].Name() != "test.data" {
+			fmt.Printf("Files don't match: %#v\n", files)
+			return
+		}
+
 		// Reading a missing file
-		_, err := os.ReadFile("nope")
+		_, err = os.ReadFile("nope")
 		if !errors.Is(err, fs.ErrNotExist) {
 			log.Printf("Should have path error, got: %#v\n", err)
 			return
