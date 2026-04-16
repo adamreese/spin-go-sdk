@@ -3,8 +3,10 @@ package kv
 
 import (
 	"fmt"
+	"iter"
 
 	keyvalue "github.com/spinframework/spin-go-sdk/v3/imports/spin_key_value_3_0_0_key_value"
+	wittypes "go.bytecodealliance.org/pkg/wit/types"
 )
 
 // Store represents a connection to a key-value store.
@@ -76,29 +78,58 @@ func (s *Store) Exists(key string) (bool, error) {
 	return result.Ok(), nil
 }
 
-// GetKeys returns all the keys from the store.
-func (s *Store) GetKeys() ([]string, error) {
+// Keys allows iterating over keys from a key-value store. Use All to iterate
+// over the keys as they are read from the stream, then call Err to check for
+// any errors. Close must be called when done to release resources.
+type Keys struct {
+	stream *wittypes.StreamReader[string]
+	future *wittypes.FutureReader[wittypes.Result[wittypes.Unit, keyvalue.Error]]
+	err    error
+}
+
+// GetKeys returns a Keys iterator for all keys in the store.
+//
+// The caller must call Close on the returned Keys when done.
+func (s *Store) GetKeys() *Keys {
 	stream, future := s.store.GetKeys()
-	defer stream.Drop()
+	return &Keys{
+		stream: stream,
+		future: future,
+	}
+}
 
-	var keys []string
-	buf := make([]string, 64)
-	for {
-		n := stream.Read(buf)
-		if n > 0 {
-			keys = append(keys, buf[:n]...)
+// All returns an iterator that yields keys as they are read from the
+// underlying stream. After iteration completes, call Err to check for errors.
+func (k *Keys) All() iter.Seq[string] {
+	return func(yield func(string) bool) {
+		buf := make([]string, 64)
+		for {
+			n := k.stream.Read(buf)
+			for i := range n {
+				if !yield(buf[i]) {
+					return
+				}
+			}
+			if k.stream.WriterDropped() {
+				break
+			}
 		}
-		if stream.WriterDropped() {
-			break
+		result := k.future.Read()
+		if result.IsErr() {
+			k.err = errorVariantToError(result.Err())
 		}
 	}
+}
 
-	result := future.Read()
-	if result.IsErr() {
-		return nil, errorVariantToError(result.Err())
-	}
+// Err returns any error encountered during iteration. It must be called after
+// iteration completes.
+func (k *Keys) Err() error {
+	return k.err
+}
 
-	return keys, nil
+// Close releases resources associated with the key iterator.
+func (k *Keys) Close() {
+	k.stream.Drop()
 }
 
 func errorVariantToError(code keyvalue.Error) error {

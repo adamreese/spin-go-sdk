@@ -34,15 +34,21 @@ func init() {
 			return
 		}
 
-		keys, err := store.GetKeys()
-		if err != nil {
+		keys := store.GetKeys()
+		defer keys.Close()
+
+		var keyList []string
+		for key := range keys.All() {
+			keyList = append(keyList, key)
+		}
+		if err := keys.Err(); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 
-		_ = json.NewEncoder(w).Encode(keys)
+		_ = json.NewEncoder(w).Encode(keyList)
 	})
 }
 
