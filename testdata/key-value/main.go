@@ -34,8 +34,12 @@ func init() {
 			return
 		}
 
-		keys, err := store.GetKeys()
-		if err != nil {
+		var keys []string
+		keysCh, errc := store.GetKeys()
+		for key := range keysCh {
+			keys = append(keys, key)
+		}
+		if err = <-errc; err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

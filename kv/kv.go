@@ -76,29 +76,38 @@ func (s *Store) Exists(key string) (bool, error) {
 	return result.Ok(), nil
 }
 
-// GetKeys returns all the keys from the store.
-func (s *Store) GetKeys() ([]string, error) {
-	stream, future := s.store.GetKeys()
-	defer stream.Drop()
+// GetKeys returns a channel that yields keys from the store as a stream.
+// The error channel receives at most one error after the keys channel is closed.
+// The consumer should range over the keys channel, then check the error channel.
+func (s *Store) GetKeys() (<-chan string, <-chan error) {
+	keys := make(chan string)
+	errc := make(chan error, 1)
 
-	var keys []string
-	buf := make([]string, 64)
-	for {
-		n := stream.Read(buf)
-		if n > 0 {
-			keys = append(keys, buf[:n]...)
+	go func() {
+		defer close(keys)
+		defer close(errc)
+
+		stream, future := s.store.GetKeys()
+		defer stream.Drop()
+
+		buf := make([]string, 64)
+		for {
+			n := stream.Read(buf)
+			for i := range n {
+				keys <- buf[i]
+			}
+			if stream.WriterDropped() {
+				break
+			}
 		}
-		if stream.WriterDropped() {
-			break
+
+		result := future.Read()
+		if result.IsErr() {
+			errc <- errorVariantToError(result.Err())
 		}
-	}
+	}()
 
-	result := future.Read()
-	if result.IsErr() {
-		return nil, errorVariantToError(result.Err())
-	}
-
-	return keys, nil
+	return keys, errc
 }
 
 func errorVariantToError(code keyvalue.Error) error {
